@@ -22,10 +22,10 @@ from urllib.parse import urlparse, parse_qs
 from typing import Optional, Dict, Tuple, List
 
 
-# ---------------------------------------------------------------------------
+
 # CONFIG — all tuneable values in one place.
 # Adding a new search engine = one dict entry, no logic change needed.
-# ---------------------------------------------------------------------------
+
 
 SEARCH_ENGINES: Dict[str, str] = {
     "google.com"       : "q",
@@ -46,7 +46,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-# ===========================================================================
+
 class HitDataParser:
     """
     Reads Adobe Analytics hit-level TSV data and builds a revenue attribution
@@ -66,7 +66,7 @@ class HitDataParser:
         # (domain, keyword) -> cumulative revenue
         self.revenue_map: Dict[Tuple[str, str], float] = defaultdict(float)
 
-    # ── helpers ─────────────────────────────────────────────────────────────
+
 
     @staticmethod
     def extract_search_info(referrer: str) -> Tuple[Optional[str], Optional[str]]:
@@ -116,7 +116,7 @@ class HitDataParser:
             return False
         return PURCHASE_EVENT in [e.strip() for e in event_list.split(",")]
 
-    # ── core logic ──────────────────────────────────────────────────────────
+
 
     def _build_session_map(self, rows: List[Dict]) -> None:
         """Pass 1: record first search-engine referrer per IP."""
@@ -164,7 +164,7 @@ class HitDataParser:
         return results
 
 
-# ===========================================================================
+
 class ReportWriter:
     """Writes results to a tab-delimited file per the assessment spec."""
 
@@ -192,7 +192,7 @@ class ReportWriter:
         return out_path
 
 
-# ===========================================================================
+
 def main() -> None:
     if len(sys.argv) != 2:
         print(f"Usage: python {os.path.basename(__file__)} <data_file>")
