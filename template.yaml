@@ -17,7 +17,7 @@ Parameters:
   Environment: 
     Type: String
     Default: develop
-  AWS_REGION: 
+  Region: 
     Type: String
     Default: us-east-1
 
@@ -32,7 +32,7 @@ Resources:
   InputBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${StackPrefix}-${Environment}-input-${AWS_REGION}"
+      BucketName: !Sub "${StackPrefix}-${Environment}-input-${Region}"
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
@@ -42,7 +42,7 @@ Resources:
   OutputBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "{StackPrefix}-${Environment}-output-${AWS_REGION}"
+      BucketName: !Sub "{StackPrefix}-${Environment}-output-${Region}"
 
   # ── IAM: Lambda execution role (least privilege) ────────────────────────
   # Scoped to exactly what Lambda needs -- nothing more.
@@ -67,7 +67,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "arn:aws:logs:${AWS::AWS_REGION}:${AWS::AccountId}:log-group:/aws/lambda/${StackPrefix}-${Environment}-*:*"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${StackPrefix}-${Environment}-*:*"
 
         - PolicyName: S3ReadInput
           PolicyDocument:
