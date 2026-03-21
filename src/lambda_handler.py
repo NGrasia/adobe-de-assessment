@@ -1,11 +1,20 @@
 """
 AWS Lambda handler.
 
-Triggered by S3 ObjectCreated on the input bucket.
-Downloads the .sql file, runs the analyzer, uploads the output to S3.
+Triggered by EventBridge when a .tab or .sql file lands in the input bucket.
+EventBridge event shape (NOT the old S3 direct-trigger "Records" format):
 
-Environment variables (set in template.yaml / Lambda config):
-    OUTPUT_BUCKET  —  name of the S3 bucket for results
+{
+  "source": "aws.s3",
+  "detail-type": "Object Created",
+  "detail": {
+    "bucket": { "name": "adobe-de-input-123456789" },
+    "object": { "key": "data/data.sql" }
+  }
+}
+
+Environment variables (set in template.yaml):
+    OUTPUT_BUCKET  — name of the S3 bucket where results are written
 """
 
 import os
@@ -25,35 +34,45 @@ OUTPUT_BUCKET = os.environ["OUTPUT_BUCKET"]
 
 def handler(event: dict, context) -> dict:
     """
-    Lambda entry point.
-    event["Records"][0] contains the S3 trigger details.
+    Lambda entry point — handles EventBridge S3 ObjectCreated events.
+
+    EventBridge puts bucket and key inside event["detail"],
+    not inside event["Records"] like the old S3 direct trigger did.
     """
-    record       = event["Records"][0]
-    input_bucket = record["s3"]["bucket"]["name"]
-    input_key    = record["s3"]["object"]["key"]
-    log.info("Triggered by s3://%s/%s", input_bucket, input_key)
+    log.info("Received event: %s", event)
 
+    # --- parse the EventBridge event -----------------------------------------
+    try:
+        detail       = event["detail"]
+        input_bucket = detail["bucket"]["name"]
+        input_key    = detail["object"]["key"]
+    except KeyError as exc:
+        # Log the full event so we can debug unexpected shapes
+        log.error("Unexpected event shape — missing key %s. Full event: %s", exc, event)
+        raise
+
+    log.info("Processing s3://%s/%s", input_bucket, input_key)
+
+    # --- download, process, upload -------------------------------------------
     with tempfile.TemporaryDirectory() as tmp:
-        local_input = os.path.join(tmp, "data.sql")
+        local_input = os.path.join(tmp, "input.tab")
 
-        # Download from S3 to Lambda /tmp
         s3.download_file(input_bucket, input_key, local_input)
         log.info("Downloaded to %s", local_input)
 
-        # Run the same logic as the CLI — no code duplication
         parser  = HitDataParser(local_input)
         results = parser.process()
 
         writer   = ReportWriter()
         out_file = writer.write(results, output_dir=tmp)
 
-        # Upload result to output bucket
         out_key = os.path.basename(out_file)
         s3.upload_file(out_file, OUTPUT_BUCKET, out_key)
-        log.info("Uploaded to s3://%s/%s", OUTPUT_BUCKET, out_key)
+        log.info("Uploaded result to s3://%s/%s", OUTPUT_BUCKET, out_key)
 
     return {
         "statusCode"     : 200,
+        "input_key"      : input_key,
         "rows_processed" : len(results),
         "output_key"     : out_key,
     }
