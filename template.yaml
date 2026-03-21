@@ -14,6 +14,12 @@ Parameters:
     Type: String
     Default: adobe-de
     Description: Short prefix used in all resource names
+  Environment: 
+    Type: String
+    Default: develop
+  AWS_REGION: 
+    Type: String
+    Default: us-east-1
 
 # ---------------------------------------------------------------------------
 # Resources
@@ -21,12 +27,12 @@ Parameters:
 Resources:
 
   # ── S3: Input bucket ────────────────────────────────────────────────────
-  # Receives the .tab data files. S3 -> EventBridge notifications enabled.
+  # Receives the .sql data files. S3 -> EventBridge notifications enabled.
   # The old direct S3->Lambda notification is NOT used here.
   InputBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${StackPrefix}-input-${AWS::AccountId}"
+      BucketName: !Sub "${StackPrefix}-${Environment}-input-${AWS_REGION}"
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
@@ -36,14 +42,14 @@ Resources:
   OutputBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${StackPrefix}-output-${AWS::AccountId}"
+      BucketName: !Sub "{StackPrefix}-${Environment}-output-${AWS_REGION}"
 
   # ── IAM: Lambda execution role (least privilege) ────────────────────────
   # Scoped to exactly what Lambda needs -- nothing more.
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${StackPrefix}-lambda-role"
+      RoleName: !Sub "${StackPrefix}-${Environment}-lambda-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -61,7 +67,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${StackPrefix}-*:*"
+                Resource: !Sub "arn:aws:logs:${AWS::AWS_REGION}:${AWS::AccountId}:log-group:/aws/lambda/${StackPrefix}-${Environment}-*:*"
 
         - PolicyName: S3ReadInput
           PolicyDocument:
@@ -70,7 +76,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${StackPrefix}-input-${AWS::AccountId}/*"
+                Resource: !Sub "arn:aws:s3:::${StackPrefix}-input-${Environment}/*"
 
         - PolicyName: S3WriteOutput
           PolicyDocument:
@@ -79,13 +85,13 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${StackPrefix}-output-${AWS::AccountId}/*"
+                Resource: !Sub "arn:aws:s3:::${StackPrefix}-output-${Environment}/*"
 
   # ── Lambda: Search Keyword Analyzer ─────────────────────────────────────
   SearchKeywordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${StackPrefix}-search-keyword"
+      FunctionName: !Sub "${StackPrefix}-${Environment}-search-keyword"
       CodeUri: src/
       Handler: lambda_handler.handler
       Runtime: python3.11
@@ -113,8 +119,8 @@ Resources:
   S3EventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "${StackPrefix}-s3-object-created"
-      Description: "Fires when a .tab file lands in the input bucket"
+      Name: !Sub "${StackPrefix}-${Environment}-s3-object-created"
+      Description: "Fires when a .sql file lands in the input bucket"
       State: ENABLED
       EventPattern:
         source:
@@ -127,7 +133,7 @@ Resources:
               - !Ref InputBucket
           object:
             key:
-              - suffix: .tab
+              - suffix: .sql
       Targets:
         - Id: SearchKeywordLambda
           Arn: !GetAtt SearchKeywordFunction.Arn
@@ -137,7 +143,7 @@ Resources:
 # ---------------------------------------------------------------------------
 Outputs:
   InputBucketName:
-    Description: Upload .tab files here to trigger the pipeline
+    Description: Upload .sql files here to trigger the pipeline
     Value: !Ref InputBucket
 
   OutputBucketName:
