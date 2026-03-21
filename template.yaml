@@ -42,7 +42,7 @@ Resources:
   OutputBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "{StackPrefix}-${Environment}-output-${Region}"
+      BucketName: !Sub "${StackPrefix}-${Environment}-output-${Region}"
 
   # ── IAM: Lambda execution role (least privilege) ────────────────────────
   # Scoped to exactly what Lambda needs -- nothing more.
