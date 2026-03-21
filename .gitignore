@@ -1,1 +1,12 @@
+__pycache__/
+*.pyc
+.env
+*.tab
+*.csv
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
 .venv/
+dist/
+.aws-sam/
