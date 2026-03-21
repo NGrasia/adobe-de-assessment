@@ -1,0 +1,86 @@
+name: Test and Deploy
+
+# Runs on every push to develop branch
+on:
+  push:
+    branches: [develop]
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+
+  # ── Job 1: Run unit tests ─────────────────────────────────────────────────
+  test:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: pytest tests/ -v --cov=src --cov-report=term-missing
+
+
+  # ── Job 2: Deploy to AWS (only runs if tests passed) ─────────────────────
+  deploy:
+    name: Deploy to AWS Lambda
+    needs: test         # test job must succeed before this runs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Install SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: SAM build
+        # Packages src/ into a deployment artifact in .aws-sam/
+        run: sam build
+
+      - name: SAM deploy
+        # --resolve-s3  : SAM auto-creates and manages a bucket for the code zip.
+        #                 You do NOT need to create or name this bucket yourself.
+        #                 SAM names it aws-sam-cli-managed-default-* in your account.
+        #
+        # --no-confirm-changeset          : deploy without interactive prompt
+        # --no-fail-on-empty-changeset    : don't fail if nothing changed
+        # CAPABILITY_IAM                  : required because template creates IAM role
+        #
+        # StackPrefix default is "adobe-de" — matches the template.yaml Parameter default.
+        # Both buckets and the IAM role are created by CloudFormation from the template.
+        # No bucket names or role ARNs need to be passed in from secrets.
+        run: |
+          sam deploy \
+            --stack-name adobe-de-assessment \
+            --resolve-s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Print stack outputs
+        # Shows bucket names and Lambda ARN after every deploy — useful for debugging
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name adobe-de-assessment \
+            --query "Stacks[0].Outputs" \
+            --output table

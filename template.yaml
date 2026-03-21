@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Adobe DE Assessment — Search Keyword Performance Analyzer.
+  All resources defined here: S3 buckets, IAM role, Lambda, EventBridge rule.
+  Deploy with: sam deploy (see deploy.yml in .github/workflows/)
+
+# ---------------------------------------------------------------------------
+# Parameters — passed in by GitHub Actions during sam deploy
+# ---------------------------------------------------------------------------
+Parameters:
+  StackPrefix:
+    Type: String
+    Default: adobe-de
+    Description: Short prefix used in all resource names
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # ── S3: Input bucket ────────────────────────────────────────────────────
+  # Receives the .tab data files. S3 -> EventBridge notifications enabled.
+  # The old direct S3->Lambda notification is NOT used here.
+  InputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${StackPrefix}-input-${AWS::AccountId}"
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  # ── S3: Output bucket ───────────────────────────────────────────────────
+  # Lambda writes the _SearchKeywordPerformance.tab result files here.
+  OutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${StackPrefix}-output-${AWS::AccountId}"
+
+  # ── IAM: Lambda execution role (least privilege) ────────────────────────
+  # Scoped to exactly what Lambda needs -- nothing more.
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${StackPrefix}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${StackPrefix}-*:*"
+
+        - PolicyName: S3ReadInput
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${StackPrefix}-input-${AWS::AccountId}/*"
+
+        - PolicyName: S3WriteOutput
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${StackPrefix}-output-${AWS::AccountId}/*"
+
+  # ── Lambda: Search Keyword Analyzer ─────────────────────────────────────
+  SearchKeywordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${StackPrefix}-search-keyword"
+      CodeUri: src/
+      Handler: lambda_handler.handler
+      Runtime: python3.11
+      Timeout: 300
+      MemorySize: 512
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref OutputBucket
+      # No Events block -- EventBridge rule below owns the trigger.
+
+  # ── Permission: allow EventBridge to invoke Lambda ───────────────────────
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt SearchKeywordFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3EventRule.Arn
+
+  # ── EventBridge: rule that watches the input bucket ─────────────────────
+  # Replaces old S3 bucket notification trigger.
+  # Advantages: rule-based filtering, easy multi-target, full CloudTrail audit,
+  # can modify routing without touching the Lambda or S3 bucket.
+  S3EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${StackPrefix}-s3-object-created"
+      Description: "Fires when a .tab file lands in the input bucket"
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref InputBucket
+          object:
+            key:
+              - suffix: .tab
+      Targets:
+        - Id: SearchKeywordLambda
+          Arn: !GetAtt SearchKeywordFunction.Arn
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+Outputs:
+  InputBucketName:
+    Description: Upload .tab files here to trigger the pipeline
+    Value: !Ref InputBucket
+
+  OutputBucketName:
+    Description: Results appear here after Lambda runs
+    Value: !Ref OutputBucket
+
+  LambdaFunctionName:
+    Value: !Ref SearchKeywordFunction
+
+  EventRuleArn:
+    Description: EventBridge rule that triggers Lambda
+    Value: !GetAtt S3EventRule.Arn
