@@ -104,7 +104,7 @@ class TestIsPurchase:
 
 
 # ---------------------------------------------------------------------------
-# Full pipeline integration test — requires data/data.tab
+# Full pipeline integration test — requires data/data.sql
 # ---------------------------------------------------------------------------
 
 class TestFullPipeline:
@@ -113,13 +113,13 @@ class TestFullPipeline:
 
     def test_process_returns_three_results(self):
         if not os.path.exists(self.SAMPLE_DATA):
-            pytest.skip("data/data.tab not found")
+            pytest.skip("data/data.sql not found")
         results = HitDataParser(self.SAMPLE_DATA).process()
         assert len(results) == 3
 
     def test_first_result_is_google_ipod_290(self):
         if not os.path.exists(self.SAMPLE_DATA):
-            pytest.skip("data/data.tab not found")
+            pytest.skip("data/data.sql not found")
         results = HitDataParser(self.SAMPLE_DATA).process()
         domain, keyword, revenue = results[0]
         assert domain  == "google.com"
@@ -128,14 +128,14 @@ class TestFullPipeline:
 
     def test_second_result_is_bing_zune_250(self):
         if not os.path.exists(self.SAMPLE_DATA):
-            pytest.skip("data/data.tab not found")
+            pytest.skip("data/data.sql not found")
         results = HitDataParser(self.SAMPLE_DATA).process()
         assert results[1][0] == "bing.com"
         assert results[1][2] == 250.0
 
     def test_results_sorted_descending(self):
         if not os.path.exists(self.SAMPLE_DATA):
-            pytest.skip("data/data.tab not found")
+            pytest.skip("data/data.sql not found")
         results = HitDataParser(self.SAMPLE_DATA).process()
         revenues = [r[2] for r in results]
         assert revenues == sorted(revenues, reverse=True)
