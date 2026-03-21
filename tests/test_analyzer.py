@@ -38,7 +38,7 @@ class TestExtractSearchInfo:
     def test_yahoo_uses_p_param(self):
         url = "http://search.yahoo.com/search?p=cd+player&ei=UTF-8"
         domain, kw = HitDataParser.extract_search_info(url)
-        assert domain == "yahoo.com"
+        assert domain == "search.yahoo.com"
         assert kw     == "cd player"
 
     def test_internal_referrer_returns_none(self):
@@ -109,7 +109,7 @@ class TestIsPurchase:
 
 class TestFullPipeline:
 
-    SAMPLE_DATA = os.path.join(os.path.dirname(__file__), "..", "data", "data.tab")
+    SAMPLE_DATA = os.path.join(os.path.dirname(__file__), "..", "data", "data.sql")
 
     def test_process_returns_three_results(self):
         if not os.path.exists(self.SAMPLE_DATA):

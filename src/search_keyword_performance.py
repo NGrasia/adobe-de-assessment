@@ -6,7 +6,7 @@ Question: How much revenue comes from external search engines,
 and which keywords perform best?
 
 Usage:
-    python search_keyword_performance.py data/data.tab
+    python search_keyword_performance.py data/data.sql
 
 Output:
     YYYY-mm-dd_SearchKeywordPerformance.tab  (tab-delimited, sorted by revenue DESC)
@@ -16,7 +16,8 @@ import csv
 import sys
 import os
 import logging
-from datetime import datetime
+# from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 from urllib.parse import urlparse, parse_qs
 from typing import Optional, Dict, Tuple, List
@@ -30,13 +31,12 @@ from typing import Optional, Dict, Tuple, List
 SEARCH_ENGINES: Dict[str, str] = {
     "google.com"       : "q",
     "bing.com"         : "q",
-    "msn.com"          : "q",   # legacy MSN search
-    "yahoo.com"        : "p",   # yahoo uses "p" not "q"
+    "msn.com"          : "q",  
     "search.yahoo.com" : "p",
-    "ask.com"          : "q",
+    "ask.com"          : "q"
 }
 
-PURCHASE_EVENT = "1"   # Adobe Analytics purchase event code
+PURCHASE_EVENT = "1"   
 
 logging.basicConfig(
     level=logging.INFO,
@@ -79,7 +79,7 @@ class HitDataParser:
             # Strip "www." so "www.google.com" matches key "google.com"
             canonical = host[4:] if host.startswith("www.") else host
             for se_domain, kw_param in SEARCH_ENGINES.items():
-                if canonical == se_domain or host == se_domain:
+                if canonical == se_domain or canonical.endswith("." + se_domain):
                     kws = parse_qs(parsed.query).get(kw_param, [])
                     if kws:
                         return se_domain, kws[0]
@@ -171,7 +171,7 @@ class ReportWriter:
     HEADERS = ["Search Engine Domain", "Search Keyword", "Revenue"]
 
     def __init__(self, run_date: Optional[datetime] = None) -> None:
-        self.run_date = run_date or datetime.utcnow()
+        self.run_date = run_date or datetime.now(timezone.utc)
 
     def filename(self) -> str:
         return self.run_date.strftime("%Y-%m-%d") + "_SearchKeywordPerformance.tab"
