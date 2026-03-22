@@ -1,20 +1,11 @@
+#!/usr/bin/env python3
+
 """
-AWS Lambda handler.
+Lambda entry point — triggered by EventBridge on S3 ObjectCreated.
 
-Triggered by EventBridge when a .tab or .sql file lands in the input bucket.
-EventBridge event shape (NOT the old S3 direct-trigger "Records" format):
-
-{
-  "source": "aws.s3",
-  "detail-type": "Object Created",
-  "detail": {
-    "bucket": { "name": "adobe-de-input-123456789" },
-    "object": { "key": "data/data.sql" }
-  }
-}
-
-Environment variables (set in template.yaml):
-    OUTPUT_BUCKET  — name of the S3 bucket where results are written
+Event shape expected:
+  event["detail"]["bucket"]["name"]
+  event["detail"]["object"]["key"]
 """
 
 import os
@@ -28,47 +19,39 @@ log = logging.getLogger()
 log.setLevel(logging.INFO)
 
 s3 = boto3.client("s3")
-
 OUTPUT_BUCKET = os.environ["OUTPUT_BUCKET"]
 
 
 def handler(event: dict, context) -> dict:
-    """
-    Lambda entry point — handles EventBridge S3 ObjectCreated events.
+    log.info("Event received: %s", event)
 
-    EventBridge puts bucket and key inside event["detail"],
-    not inside event["Records"] like the old S3 direct trigger did.
-    """
-    log.info("Received event: %s", event)
-
-    # --- parse the EventBridge event -----------------------------------------
+    # EventBridge puts bucket/key under detail — not under Records like the old S3 trigger
     try:
-        detail       = event["detail"]
+        detail  = event["detail"]
         input_bucket = detail["bucket"]["name"]
         input_key    = detail["object"]["key"]
     except KeyError as exc:
-        # Log the full event so we can debug unexpected shapes
-        log.error("Unexpected event shape — missing key %s. Full event: %s", exc, event)
+        log.error("Unexpected event shape, missing: %s — full event: %s", exc, event)
         raise
 
     log.info("Processing s3://%s/%s", input_bucket, input_key)
 
-    # --- download, process, upload -------------------------------------------
     with tempfile.TemporaryDirectory() as tmp:
-        local_input = os.path.join(tmp, "input.tab")
+        local_file = os.path.join(tmp, "input.tab")
 
-        s3.download_file(input_bucket, input_key, local_input)
-        log.info("Downloaded to %s", local_input)
+        s3.download_file(input_bucket, input_key, local_file)
 
-        parser  = HitDataParser(local_input)
+        parser  = HitDataParser(local_file)
         results = parser.process()
 
+        # tried writing straight to /tmp root first — ran into permission issues on some runtimes
+        # tempfile.TemporaryDirectory() is cleaner
         writer   = ReportWriter()
         out_file = writer.write(results, output_dir=tmp)
 
         out_key = os.path.basename(out_file)
         s3.upload_file(out_file, OUTPUT_BUCKET, out_key)
-        log.info("Uploaded result to s3://%s/%s", OUTPUT_BUCKET, out_key)
+        log.info("Uploaded -> s3://%s/%s", OUTPUT_BUCKET, out_key)
 
     return {
         "statusCode"     : 200,
