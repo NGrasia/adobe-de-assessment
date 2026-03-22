@@ -1,34 +1,21 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
-Description: >
-  Adobe DE Assessment — Search Keyword Performance Analyzer.
-  All resources defined here: S3 buckets, IAM role, Lambda, EventBridge rule.
-  Deploy with: sam deploy (see deploy.yml in .github/workflows/)
+Description: Search Keyword Performance Analyzer — Lambda + S3 + EventBridge
 
-# ---------------------------------------------------------------------------
-# Parameters — passed in by GitHub Actions during sam deploy
-# ---------------------------------------------------------------------------
 Parameters:
   StackPrefix:
     Type: String
     Default: adobe-de
-    Description: Short prefix used in all resource names
-  Environment: 
+  Environment:
     Type: String
     Default: develop
-  Region: 
+  Region:
     Type: String
     Default: us-east-1
 
-# ---------------------------------------------------------------------------
-# Resources
-# ---------------------------------------------------------------------------
 Resources:
 
-  # ── S3: Input bucket ────────────────────────────────────────────────────
-  # Receives the .sql data files. S3 -> EventBridge notifications enabled.
-  # The old direct S3->Lambda notification is NOT used here.
   InputBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -37,15 +24,11 @@ Resources:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
 
-  # ── S3: Output bucket ───────────────────────────────────────────────────
-  # Lambda writes the _SearchKeywordPerformance.tab result files here.
   OutputBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${StackPrefix}-${Environment}-output-${Region}"
 
-  # ── IAM: Lambda execution role (least privilege) ────────────────────────
-  # Scoped to exactly what Lambda needs -- nothing more.
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -68,26 +51,21 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${StackPrefix}-${Environment}-*:*"
-
         - PolicyName: S3ReadInput
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${StackPrefix}-input-${Environment}/*"
-
+                Action: s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${StackPrefix}-${Environment}-input-${Region}/*"
         - PolicyName: S3WriteOutput
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${StackPrefix}-output-${Environment}/*"
+                Action: s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${StackPrefix}-${Environment}-output-${Region}/*"
 
-  # ── Lambda: Search Keyword Analyzer ─────────────────────────────────────
   SearchKeywordFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -101,9 +79,7 @@ Resources:
       Environment:
         Variables:
           OUTPUT_BUCKET: !Ref OutputBucket
-      # No Events block -- EventBridge rule below owns the trigger.
 
-  # ── Permission: allow EventBridge to invoke Lambda ───────────────────────
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -112,15 +88,10 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt S3EventRule.Arn
 
-  # ── EventBridge: rule that watches the input bucket ─────────────────────
-  # Replaces old S3 bucket notification trigger.
-  # Advantages: rule-based filtering, easy multi-target, full CloudTrail audit,
-  # can modify routing without touching the Lambda or S3 bucket.
   S3EventRule:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${StackPrefix}-${Environment}-s3-object-created"
-      Description: "Fires when a .sql file lands in the input bucket"
       State: ENABLED
       EventPattern:
         source:
@@ -138,21 +109,12 @@ Resources:
         - Id: SearchKeywordLambda
           Arn: !GetAtt SearchKeywordFunction.Arn
 
-# ---------------------------------------------------------------------------
-# Outputs
-# ---------------------------------------------------------------------------
 Outputs:
   InputBucketName:
-    Description: Upload .sql files here to trigger the pipeline
     Value: !Ref InputBucket
-
   OutputBucketName:
-    Description: Results appear here after Lambda runs
     Value: !Ref OutputBucket
-
   LambdaFunctionName:
     Value: !Ref SearchKeywordFunction
-
   EventRuleArn:
-    Description: EventBridge rule that triggers Lambda
     Value: !GetAtt S3EventRule.Arn
