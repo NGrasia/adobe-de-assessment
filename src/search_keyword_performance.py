@@ -16,23 +16,23 @@ from urllib.parse import urlparse, parse_qs
 from typing import Optional, Dict, Tuple, List
 
 
-# search engine domain -> query param that holds the keyword
-SE_DOMAINS: Dict[str, str] = {
-    "google.com"       : "q",
-    "bing.com"         : "q",
-    "msn.com"          : "q",
-    "search.yahoo.com" : "p",
-    "ask.com"          : "q",
-}
-
-PURCHASE_EVENT = "1"
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger(__name__)
+
+
+# search engine domain -> query param that holds the keyword
+SE_DOMAINS: Dict[str, str] = {
+    "google.com"       : "q",
+    "bing.com"         : "q",
+    "search.yahoo.com" : "p",
+    
+}
+
+PURCHASE_EVENT = "1"
 
 
 class HitDataParser:
@@ -44,7 +44,7 @@ class HitDataParser:
 
     def __init__(self, filepath: str) -> None:
         self.filepath = filepath
-        self.session_map: Dict[str, Tuple[str, str]] = {}       # ip -> (domain, keyword)
+        self.session_map: Dict[str, Tuple[str, str]] = {}       
         self.rev_totals: Dict[Tuple[str, str], float] = defaultdict(float)
 
     @staticmethod
@@ -59,6 +59,8 @@ class HitDataParser:
             host_clean = host[4:] if host.startswith("www.") else host
 
             for domain, kw_param in SE_DOMAINS.items():
+
+                # print(f" debug {domain} , {kw_param} " )
                 if host_clean == domain or host == domain:
                     kws = parse_qs(parsed.query).get(kw_param, [])
                     if kws:
@@ -101,6 +103,8 @@ class HitDataParser:
             if not ip or ip in self.session_map:
                 continue
             domain, kw = self.get_search_info(row.get("referrer", ""))
+
+            print ( f"debug {domain} , {kw}")
             if domain and kw:
                 self.session_map[ip] = (domain, kw)
                 log.info("session  %-16s  ->  %s / %r", ip, domain, kw)
@@ -181,10 +185,10 @@ def main() -> None:
 
     print()
     print(f"  {'Search Engine':<22} {'Keyword':<22} {'Revenue':>10}")
-    print("  " + "-" * 58)
+    # print("  " + "-" * 58)
     for d, k, r in results:
         print(f"  {d:<22} {k:<22} ${r:>9.2f}")
-    print(f"\n  Output -> {out_path}\n")
+    print(f"  Output :  {out_path}")
 
 
 if __name__ == "__main__":

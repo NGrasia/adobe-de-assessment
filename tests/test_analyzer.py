@@ -16,7 +16,7 @@ from search_keyword_performance import HitDataParser, ReportWriter
 DATA = os.path.join(os.path.dirname(__file__), "..", "data", "data.sql")
 
 
-# -- search engine parsing ----------------------------------------------------
+#search engine parsing
 
 def test_google_extracts_domain_and_keyword():
     domain, kw = HitDataParser.get_search_info(
@@ -39,7 +39,7 @@ def test_internal_referrer_returns_none():
     assert HitDataParser.get_search_info("") == (None, None)
 
 
-# -- revenue extraction -------------------------------------------------------
+#revenue extraction 
 
 def test_revenue_single_product():
     assert HitDataParser.get_revenue("Electronics;Zune - 32GB;1;250;") == 250.0
@@ -55,7 +55,7 @@ def test_revenue_empty_returns_zero():
     assert HitDataParser.get_revenue("Electronics;A;1;;") == 0.0
 
 
-# -- purchase event detection (critical edge cases) ---------------------------
+#purchase event detection (critical edge cases)
 
 def test_purchase_detected():
     assert HitDataParser.is_purchase("1") is True
@@ -70,7 +70,7 @@ def test_cart_events_are_not_purchases():
     assert HitDataParser.is_purchase("") is False
 
 
-# -- full pipeline + output ---------------------------------------------------
+#full pipeline + output 
 
 def test_pipeline_results_and_sort():
     if not os.path.exists(DATA):
