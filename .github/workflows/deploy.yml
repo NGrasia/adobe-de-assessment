@@ -1,6 +1,6 @@
 name: Test and Deploy
 
-# Runs on every push to develop branch
+
 on:
   push:
     branches: [develop]
@@ -10,7 +10,7 @@ env:
 
 jobs:
 
-  # ── Job 1: Run unit tests ─────────────────────────────────────────────────
+  # Job 1: Run unit tests
   test:
     name: Run unit tests
     runs-on: ubuntu-latest
@@ -29,10 +29,10 @@ jobs:
         run: pytest tests/ -v --cov=src --cov-report=term-missing
 
 
-  # ── Job 2: Deploy to AWS (only runs if tests passed) ─────────────────────
+  # Job 2: Deploy to AWS (only runs if tests passed)
   deploy:
     name: Deploy to AWS Lambda
-    needs: test         # test job must succeed before this runs
+    needs: test         
     runs-on: ubuntu-latest
 
     steps:
@@ -57,17 +57,6 @@ jobs:
         run: sam build
 
       - name: SAM deploy
-        # --resolve-s3  : SAM auto-creates and manages a bucket for the code zip.
-        #                 You do NOT need to create or name this bucket yourself.
-        #                 SAM names it aws-sam-cli-managed-default-* in your account.
-        #
-        # --no-confirm-changeset          : deploy without interactive prompt
-        # --no-fail-on-empty-changeset    : don't fail if nothing changed
-        # CAPABILITY_IAM                  : required because template creates IAM role
-        #
-        # StackPrefix default is "adobe-de" — matches the template.yaml Parameter default.
-        # Both buckets and the IAM role are created by CloudFormation from the template.
-        # No bucket names or role ARNs need to be passed in from secrets.
         run: |
           sam deploy \
             --stack-name adobe-de-assessment \
@@ -78,7 +67,7 @@ jobs:
             --region ${{ env.AWS_REGION }}
 
       - name: Print stack outputs
-        # Shows bucket names and Lambda ARN after every deploy — useful for debugging
+        # for debugging
         run: |
           aws cloudformation describe-stacks \
             --stack-name adobe-de-assessment \

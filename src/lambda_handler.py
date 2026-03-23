@@ -51,7 +51,7 @@ def handler(event: dict, context) -> dict:
 
         out_key = os.path.basename(out_file)
         s3.upload_file(out_file, OUTPUT_BUCKET, out_key)
-        log.info("Uploaded -> s3://%s/%s", OUTPUT_BUCKET, out_key)
+        log.info("Uploaded : s3://%s/%s", OUTPUT_BUCKET, out_key)
 
     return {
         "statusCode"     : 200,
